@@ -1,0 +1,190 @@
+# Samsung A03 Core — ADB Optimization Cheatsheet (sin root)
+
+## 0. Conexión
+```bash
+adb devices
+adb shell
+```
+
+## 1. Debloating (Samsung/OneUI Core + Google)
+
+### Deshabilitar sin desinstalar (reversible, no rompe OTA)
+```bash
+pm disable-user --user 0 com.samsung.android.bixby.agent
+pm disable-user --user 0 com.samsung.android.bixby.wakeup
+pm disable-user --user 0 com.samsung.android.app.spage           # Samsung Free/Daily board
+pm disable-user --user 0 com.samsung.android.game.gamehome
+pm disable-user --user 0 com.samsung.android.rubin.app           # Bixby routines
+pm disable-user --user 0 com.samsung.android.app.tips
+pm disable-user --user 0 com.samsung.android.mateagent
+pm disable-user --user 0 com.samsung.android.aircommandmanager
+pm disable-user --user 0 com.samsung.android.role.app
+pm disable-user --user 0 com.samsung.android.messaging.wearable
+pm disable-user --user 0 com.samsung.oh                          # Ask Samsung / feedback
+pm disable-user --user 0 com.samsung.android.samsungpass
+pm disable-user --user 0 com.sec.android.app.samsungapps          # Galaxy Store
+pm disable-user --user 0 com.samsung.android.mobileservice
+pm disable-user --user 0 com.facebook.services
+pm disable-user --user 0 com.facebook.appmanager
+pm disable-user --user 0 com.facebook.system
+pm disable-user --user 0 com.google.android.apps.tachyon         # Duo
+pm disable-user --user 0 com.google.android.feedback
+pm disable-user --user 0 com.google.android.apps.wellbeing
+pm disable-user --user 0 com.google.android.partnersetup
+pm disable-user --user 0 com.qualcomm.qti.qms.service.telemetry  # si es Qualcomm
+pm disable-user --user 0 com.android.printspooler
+pm disable-user --user 0 com.android.chrome                      # si usas otro browser
+pm disable-user --user 0 com.google.android.googlequicksearchbox # Google app/Assistant (cuidado, mata search widget)
+```
+
+### Desinstalar para el user 0 (recuperable con `pm install-existing`)
+```bash
+pm uninstall --user 0 <paquete>
+```
+
+### Listar paquetes
+```bash
+pm list packages -d          # deshabilitados
+pm list packages -3          # solo de terceros
+pm list packages | grep -i samsung
+```
+
+---
+
+## 2. Limpieza de cache / datos
+```bash
+pm trim-caches 999999999999          # fuerza al sistema a liberar toda la cache posible
+pm clear <paquete>                   # borra cache+data de un paquete (¡cierra sesión!)
+adb shell cmd package clear <paquete>
+du -sh /data/data/<paquete>/cache    # cache por app sin tocar data (limitado sin root)
+```
+
+---
+
+## 3. Logs
+```bash
+adb logcat -c                        # limpiar buffer de logcat
+adb logcat -G 1M                     # limitar tamaño del buffer
+adb shell logcat -b all -c           # limpiar todos los buffers (main,radio,events,crash)
+adb shell rm -rf /data/log/*         # requiere permisos, normalmente denegado sin root
+adb bugreport > /dev/null            # generar y descartar (fuerza flush de logs internos)
+adb shell dumpsys dropbox --clear    # limpia dropbox (crash reports, ANR, etc.)
+adb shell dumpsys dropbox --print    # ver qué hay antes de limpiar
+adb shell rm -rf /data/anr/*         # traces de ANR (puede pedir permisos)
+```
+
+---
+
+## 4. Animaciones / rendimiento percibido
+```bash
+adb shell settings put global window_animation_scale 0.5
+adb shell settings put global transition_animation_scale 0.5
+adb shell settings put global animator_duration_scale 0.5
+# 0 = sin animaciones (máxima velocidad percibida)
+```
+
+---
+
+## 5. Batería / procesos en segundo plano
+```bash
+adb shell dumpsys battery reset
+adb shell dumpsys deviceidle whitelist        # ver apps exentas de Doze
+adb shell dumpsys deviceidle force-idle       # forzar modo Doze (testing)
+adb shell am force-stop <paquete>
+adb shell cmd appops set <paquete> RUN_IN_BACKGROUND ignore
+adb shell settings put global app_standby_enabled 1
+adb shell settings put global background_process_limit 2   # valor bajo = más agresivo
+```
+
+### Standby buckets / adaptive battery (más agresivo que Doze)
+```bash
+adb shell am set-standby-bucket <paquete> 45     # RARE (máxima restricción)
+adb shell am get-standby-bucket <paquete>
+adb shell dumpsys usagestats | grep -A5 <paquete>
+```
+
+### Hibernación de apps (Android 11+, libera storage y RAM)
+```bash
+adb shell am compat enable FORCE_ENABLE_HIBERNATION <paquete>
+adb shell cmd game hibernation force-set <paquete> true 0
+```
+
+---
+
+## 6. Storage
+```bash
+adb shell sm fstrim                          # TRIM manual del almacenamiento
+adb shell df -h                               # ver uso de espacio
+adb shell du -sh /data/data/* 2>/dev/null | sort -rh | head -20   # apps que más pesan
+```
+
+### Cache de medios / thumbnails
+```bash
+adb shell content delete --uri content://media/external/images/thumbnails
+adb shell rm -rf /storage/emulated/0/.thumbnails/*
+adb shell rm -rf /storage/emulated/0/Android/data/com.android.providers.media.module/cache/*
+```
+
+---
+
+## 7. Rendimiento / compilación de apps
+```bash
+adb shell cmd package compile -m speed <paquete>   # recompila para velocidad (vs battery)
+adb shell cmd package compile -m speed -a          # todas las apps (tarda bastante en A03)
+adb shell pm art dump                              # ver estado de compilación
+```
+
+---
+
+## 8. Red / datos
+```bash
+adb shell settings put global mobile_data_always_on 0
+adb shell svc data disable
+adb shell svc wifi disable
+adb shell settings put global private_dns_mode hostname
+adb shell settings put global private_dns_specifier dns.google
+adb shell settings put global wifi_scan_always_enabled 0   # apaga escaneo pasivo
+```
+
+---
+
+## 9. UI / SystemUI
+```bash
+adb shell am crash com.android.systemui   # reinicia SystemUI (libera memoria acumulada)
+adb shell wm density reset
+adb shell wm size reset
+```
+
+---
+
+## 10. Sincronización
+```bash
+adb shell settings put global auto_sync 0
+adb shell content query --uri content://com.android.contacts/status
+```
+
+---
+
+## 11. Forzar stop masivo (limpieza rápida en script)
+```bash
+for pkg in $(adb shell pm list packages -3 | sed 's/package://'); do
+  adb shell am force-stop "$pkg"
+done
+```
+
+---
+
+## 12. Diagnóstico útil para scripts
+```bash
+adb shell dumpsys meminfo <paquete>          # uso de RAM por app
+adb shell dumpsys cpuinfo                    # uso de CPU
+adb shell top -n 1                           # snapshot de procesos
+adb shell dumpsys diskstats                  # uso de disco detallado
+adb shell getprop ro.build.version.release   # versión Android
+adb shell getprop ro.product.model
+adb shell settings put global development_settings_enabled 1   # necesario para que varios put/global surtan efecto
+```
+
+---
+
+

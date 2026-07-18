@@ -1,0 +1,201 @@
+ahorq mandame todos los ejemplos
+lisros para adaptqr ami proyecto
+
+Te mando **todos los ejemplos aislados y listos para adaptar** a tu proyecto, sin código global ni lógica completa del programa, solo los bloques que puedes copiar–pegar y modificar según tu `show_vault` o menús.
+
+***
+
+### A. Limpiar pantalla (`os.system("clear")` / `cls`)
+
+#### 1. Función portátil para limpiar consola
+
+```python
+import os
+
+def clear_screen():
+    comando = "cls" if os.name == "nt" else "clear"
+    os.system(comando)
+```
+
+Puedes llamarla así:
+
+```python
+clear_screen()
+print("=== CAJA DE VAULT ===")
+```
+
+  
+
+***
+
+#### 2. Alternativa con `subprocess` (opcional, más limpia)
+
+```python
+import subprocess
+import os
+
+def clear_screen():
+    comando = "cls" if os.name == "nt" else "clear"
+    subprocess.run(comando, shell=True)
+```
+
+  
+
+***
+
+### B. Alinear texto con métodos de string
+
+#### 1. `str.center()` – centrar texto
+
+```python
+titulo = "VAULT"
+print(titulo.center(60, "="))
+print("Gestión de credenciales".center(60))
+```
+
+Resultado:
+
+```
+============================VAULT=============================
+                Gestión de credenciales
+```
+
+  
+
+***
+
+#### 2. `str.ljust()` – alinear a la izquierda
+
+```python
+linea = "1. Añadir entrada"
+print(linea.ljust(30))
+
+linea = "2. Mostrar caja"
+print(linea.ljust(30))
+```
+
+  
+
+***
+
+#### 3. `str.rjust()` – alinear a la derecha
+
+```python
+numero = "123"
+precio = "25.99"
+
+print("Cantidad: " + numero.rjust(8))
+print("Precio:   " + precio.rjust(8))
+```
+
+  
+
+***
+
+#### 4. Combinando `ljust`, `center`, `rjust` en un mismo bloque
+
+```python
+print("".center(60, "="))
+print(" MENÚ PRINCIPAL ".center(60))
+print("".center(60, "="))
+
+print("1. Añadir entrada".ljust(30))
+print("2. Mostrar caja".ljust(30))
+print("3. Buscar".ljust(30))
+print("4. Salir".ljust(30))
+```
+
+  
+
+***
+
+### C. Tabla simple para `show_vault` (sin objetos complejos, solo strings)
+
+```python
+def show_vault_mini():
+    clear_screen()
+    print(" CAJA DE VAULT ".center(60, "="))
+    print("")
+    print("ID".ljust(5) + "Nombre".ljust(20) + "Usuario".ljust(20) + "Categoría".ljust(15))
+    print("-" * 60)
+
+    # Simulación de datos (reemplaza esto por tu lista/diccionario real)
+    entradas = [
+        ("1", "Google", "miuser@gmail.com", "Web"),
+        ("2", "Github", "hacker123", "Code"),
+        ("3", "Banco", "user-bank", "Finanzas"),
+    ]
+
+    for _id, nombre, usuario, categoria in entradas:
+        print(
+            _id.ljust(5) +
+            nombre.ljust(20) +
+            usuario.ljust(20) +
+            categoria.ljust(15)
+        )
+```
+
+  
+
+***
+
+### D. Versión con f‑strings (misma lógica, más moderna)
+
+```python
+def show_vault_mini_fstring():
+    clear_screen()
+    print(" CAJA DE VAULT ".center(60, "="))
+    print("")
+    print(f"{'ID':<5}{'Nombre':<20}{'Usuario':<20}{'Categoría':<15}")
+    print("-" * 60)
+
+    entradas = [
+        ("1", "Google", "miuser@gmail.com", "Web"),
+        ("2", "Github", "hacker123", "Code"),
+        ("3", "Banco", "user-bank", "Finanzas"),
+    ]
+
+    for _id, nombre, usuario, categoria in entradas:
+        print(f"{_id:<5}{nombre:<20}{usuario:<20}{categoria:<15}")
+```
+
+Especificadores:
+- `<20` → izquierda en 20 caracteres.  
+- `^20` → centrado.  
+- `>20` → derecha. [1][2]
+
+***
+
+### E. Encabezado y separadores reutilizables
+
+Puedes copiar estos bloques como **snippets reutilizables**:
+
+```python
+def print_header(text, width=60, char="="):
+    print(text.center(width, char))
+
+def print_separator(width=60, char="-"):
+    print(char * width)
+```
+
+Uso:
+
+```python
+print_header(" CAJA DE VAULT ", 60, "=")
+print("")
+print("ID".ljust(5) + "Nombre".ljust(20) + "Usuario".ljust(20) + "Categoría".ljust(15))
+print_separator()
+```
+
+  
+
+***
+
+Con esto ya tienes **todos los ejemplos prácticos** listos para integrarlos en tu proyecto:  
+- `clear_screen()` → lo usas antes de cada menú o `show_vault`.  
+- `ljust / center / rjust` → para formatear encabezados, menús y tablas de credenciales.  
+- Tabla con columnas → la puedes enlazar con tu `listado` de entradas.
+
+Si quieres, en la **F4** te ayudo a hacer **fragmentos todavía más pequeños** pensados solo para tu `show_vault` (sin `clear_screen` ni menús), solo la parte de visualización de credenciales. ¿Prefieres que lo hagamos así?
+
+

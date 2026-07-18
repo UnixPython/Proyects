@@ -1,0 +1,58 @@
+json a bytes
+
+import json
+import base64
+
+data = {"image_data": b"\x89PNG\r\n\x1a\n..."}
+# Encode bytes to base64, then decode the base64-bytes to a UTF-8 string
+data["image_data"] = base64.b64encode(data["image_data"]).decode('utf-8')
+
+json_string = json.dumps(data)
+
+
+
+
+json Anidado
+import json
+
+json_data = '''
+{
+    "user": {
+        "id": 1,
+        "name": "Bob",
+        "roles": ["admin", "editor"]
+    },
+    "active": true
+}
+'''
+
+data = json.loads(json_data)
+
+# Accessing nested data
+print(data["user"]["roles"][0])  # Output: admin
+print(data["active"])             # Output: True (Python Boolean)
+
+
+veridicae si archivo existe
+try:
+    # File path
+    a = "myfile.txt"
+    
+    # Try to open the file
+    with open(a, 'r') as file:
+        print("File exists and is ready to read")
+except FileNotFoundError:
+    print("File does not exist")
+
+alt2
+
+from pathlib import Path
+
+# File path
+a = Path("myfile.txt")
+
+# Check if the file exists
+if a.exists():
+    print("File exists")
+else:
+    print("File does not exist")

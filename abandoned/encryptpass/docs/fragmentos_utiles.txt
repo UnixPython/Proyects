@@ -1,0 +1,154 @@
+# ============================================================
+# fragmentos_utiles.txt
+# Filtrado de rate.txt — SOLO lo aprovechable para rate_limit.py
+# Fuente original: rate.txt (líneas indicadas por bloque)
+# ============================================================
+
+
+# ──────────────────────────────────────────────────────────────
+# BLOQUE 1 → destino: _calcular_delay()
+# fuente original: líneas 1-5 y 14
+# ──────────────────────────────────────────────────────────────
+
+def expo(
+    base: float = 2,
+    factor: float = 1,
+    max_value: Optional[float] = None
+) -> Generator[float, Any, None]:
+
+    # referencia de firma — cómo se parametriza un generador
+    # de backoff (base, factor, cap). No es el cuerpo completo.
+
+
+# cálculo exponencial puro, sin jitter:
+temp = base_delay * (2 ** attempt)
+
+# NOTA: en la fuente original esta línea iba seguida de
+#   sleep_time = random.uniform(0, temp)
+# eso es JITTER — descartado para tu diseño (caso local,
+# backoff determinista, no sistema distribuido).
+
+
+# ──────────────────────────────────────────────────────────────
+# BLOQUE 2 → destino: _cargar_estado() / _guardar_estado()
+# fuente original: líneas 193-226
+# ──────────────────────────────────────────────────────────────
+
+import fcntl
+import os
+import time
+from contextlib import contextmanager
+
+@contextmanager
+def file_lock(filepath):
+    # Open the file; 'a+' or 'r+' avoids truncating the data while locking
+    file_object = open(filepath, 'a+')
+    try:
+        # LOCK_EX: Exclusive lock
+        # LOCK_NB: Non-blocking (raises exception instead of waiting)
+        fcntl.lockf(file_object, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield file_object
+    except (OSError, BlockingIOError):
+        print(f"Process {os.getpid()} cannot acquire lock. File is busy.")
+        raise
+    finally:
+        try:
+            # LOCK_UN: Release the lock
+            fcntl.lockf(file_object, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        file_object.close()
+
+# Usage Example:
+if __name__ == "__main__":
+    try:
+        with file_lock("my_app.lock") as lock_file:
+            print("Lock acquired safely! Doing critical work...")
+            time.sleep(5)
+    except (OSError, BlockingIOError):
+        print("Could not start. Another instance is running.")
+----------
+flock
+
+import fcntl
+import time
+
+# 1. Open file (must be writable for an exclusive lock)
+with open("app.lock", "w") as f:
+    try:
+        print("Acquiring exclusive lock...")
+        # 2. Acquire exclusive, blocking lock
+        fcntl.lockf(f, fcntl.LOCK_EX)
+        print("Lock acquired! Writing data...")
+        
+        f.write("Critical data entry\n")
+        f.flush()  # Ensure data is written before releasing
+        time.sleep(5)  # Simulate work
+        
+    finally:
+        # 3. Release the lock explicitly
+        fcntl.lockf(f, fcntl.LOCK_UN)
+        print("Lock released.")
+-----
+
+# NOTA: usa fcntl.lockf(), no fcntl.flock(). Investiga la
+# diferencia antes de adaptarlo a tu _guardar_estado().
+# LOCK_NB es no bloqueante — decide si tu caso lo necesita
+# bloqueante o no.
+
+
+# ──────────────────────────────────────────────────────────────
+# BLOQUE 3 → destino: esta_bloqueado() / _limpiar_expirados()
+# fuente original: líneas 105-151
+# ADVERTENCIA: esto es Sliding Window COUNTER (aproximación),
+# NO es Sliding Window LOG (lista de timestamps) que diseñaste.
+# Revisar con cuidado antes de adaptar — son parientes, no iguales.
+# ──────────────────────────────────────────────────────────────
+
+from time import time, sleep
+
+
+class SlidingWindow:
+
+    def __init__(self, capacity, time_unit, forward_callback, drop_callback):
+        self.capacity = capacity
+        self.time_unit = time_unit
+        self.forward_callback = forward_callback
+        self.drop_callback = drop_callback
+
+        self.cur_time = time()
+        self.pre_count = capacity
+        self.cur_count = 0
+
+    def handle(self, packet):
+
+        if (time() - self.cur_time) > self.time_unit:
+            self.cur_time = time()
+            self.pre_count = self.cur_count
+            self.cur_count = 0
+
+        ec = (self.pre_count * (self.time_unit - (time() - self.cur_time)) / self.time_unit) + self.cur_count
+
+        if (ec > self.capacity):
+            return self.drop_callback(packet)
+
+        self.cur_count += 1
+        return self.forward_callback(packet)
+
+
+# QUÉ RESCATAR DE AQUÍ:
+# el patrón de "if (time() - self.cur_time) > self.time_unit:"
+# → cómo detectar que una ventana de tiempo expiró y resetear.
+# Esa idea sí aplica a tu _limpiar_expirados(), aunque tu
+# implementación final use una lista de timestamps en vez
+# de un contador aproximado (ec).
+
+
+# ============================================================
+# FIN — fragmentos descartados (no incluidos en este archivo):
+#   LeakyBucket            → otro algoritmo, no aplica
+#   FixedWindow            → ya descartado en tu diseño
+#   RateLimiter (Redis)    → tu diseño es file-based, no Redis
+#   Cookies Django/Flask   → dominio distinto, no aplica
+#   termios/TTY ioctl      → dominio distinto, no aplica
+# ============================================================

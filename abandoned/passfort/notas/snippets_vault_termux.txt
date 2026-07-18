@@ -1,0 +1,181 @@
+========================================
+  SNIPPETS — VAULT TERMUX REFERENCE
+========================================
+
+INSTALAR DEPS
+-------------
+pip install pycryptodome
+
+
+========================================
+1. json.dumps — dict -> bytes
+========================================
+
+USO: Antes de encriptar. Convierte tu dict a bytes.
+
+  import json
+
+  data = {"user": "anonym", "pass": "1234"}
+
+  json_bytes = json.dumps(data).encode("utf-8")
+  # resultado: b'{"user": "anonym", "pass": "1234"}'
+
+CUANDO USARLO: Siempre antes de encriptar un dict.
+
+
+========================================
+2. json.loads — bytes/str -> dict
+========================================
+
+USO: Despues de descifrar. Recupera el dict.
+
+  import json
+
+  raw = b'{"user": "anonym", "pass": "1234"}'
+
+  data = json.loads(raw)
+  print(data["user"])   # anonym
+
+CUANDO USARLO: Siempre despues de descifrar los bytes.
+
+
+========================================
+3. AES-GCM — encrypt / decrypt (Termux)
+========================================
+
+USO: Cifrar y descifrar bytes de forma segura.
+
+  from Crypto.Cipher import AES
+  from Crypto.Random import get_random_bytes
+
+  key = get_random_bytes(32)  # guarda esta key!
+
+  # -- ENCRIPTAR --
+  cipher = AES.new(key, AES.MODE_GCM)
+  ciphertext, tag = cipher.encrypt_and_digest(b"datos secretos")
+  nonce = cipher.nonce
+
+  # -- DESCIFRAR --
+  cipher2 = AES.new(key, AES.MODE_GCM, nonce=nonce)
+  recovered = cipher2.decrypt_and_verify(ciphertext, tag)
+  print(recovered)  # b"datos secretos"
+
+CUANDO USARLO: Para cifrar cualquier bytes. 
+Para descifrar necesitas: key + nonce + tag + ciphertext.
+
+
+========================================
+4. Empaquetar nonce+tag+ciphertext en un blob
+========================================
+
+USO: Guardar todo en un solo bytes para escribir al archivo.
+
+  # -- GUARDAR --
+  blob = nonce + tag + ciphertext
+
+  # -- RECUPERAR --
+  nonce      = blob[:16]
+  tag        = blob[16:32]
+  ciphertext = blob[32:]
+
+CUANDO USARLO: Antes de escribir al archivo y al leerlo.
+
+
+========================================
+5. pathlib — crear archivo / check exists / leer-escribir bytes
+========================================
+
+USO: Manejo de archivos sin string fragil.
+
+  from pathlib import Path
+
+  p = Path("vault.db")
+
+  # verificar si existe
+  if p.exists():
+      print("ya existe")
+  else:
+      p.touch()   # crea vacio
+
+  # escribir bytes
+  p.write_bytes(b"contenido")
+
+  # leer bytes
+  data = p.read_bytes()
+
+CUANDO USARLO: Para leer/escribir el archivo del vault.
+
+
+========================================
+6. os.replace — escritura atomica
+========================================
+
+USO: Escribir sin corromper el archivo si el proceso muere.
+
+  import os
+  from pathlib import Path
+
+  def atomic_write(path: Path, data: bytes):
+      tmp = path.with_suffix(".tmp")
+      tmp.write_bytes(data)
+      os.replace(tmp, path)   # atomico en Linux
+
+  # ejemplo
+  atomic_write(Path("vault.db"), b"datos cifrados")
+
+CUANDO USARLO: Siempre que escribas el vault al disco.
+
+
+========================================
+7. os.chmod — permisos 600
+========================================
+
+USO: Que solo tu usuario pueda leer/escribir el archivo.
+
+  import os
+  import stat
+
+  os.chmod("vault.db", stat.S_IRUSR | stat.S_IWUSR)
+  # equivale a chmod 600 vault.db
+
+  # verificar
+  print(oct(os.stat("vault.db").st_mode))  # 0o100600
+
+CUANDO USARLO: Una vez despues de crear el vault por primera vez.
+
+
+========================================
+FLUJO COMPLETO — GUARDAR
+========================================
+
+  dict
+    -> json.dumps().encode()    # -> bytes
+    -> AES-GCM encrypt          # -> nonce + tag + ciphertext
+    -> nonce + tag + ciphertext # -> blob
+    -> atomic_write(blob)       # -> archivo
+    -> chmod 600                # -> solo tu usuario
+
+
+========================================
+FLUJO COMPLETO — LEER
+========================================
+
+  archivo
+    -> Path.read_bytes()        # -> blob
+    -> blob[:16] / [16:32] / [32:]  # -> nonce, tag, ciphertext
+    -> AES-GCM decrypt          # -> bytes
+    -> json.loads()             # -> dict
+
+
+========================================
+RESUMEN DE IMPORTS NECESARIOS
+========================================
+
+  import json
+  import os
+  import stat
+  from pathlib import Path
+  from Crypto.Cipher import AES
+  from Crypto.Random import get_random_bytes
+
+========================================

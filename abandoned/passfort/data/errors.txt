@@ -1,0 +1,64 @@
+**`auth.py` — login con argumentos correctos**
+```python
+if verify_password(password, stored_hash):
+    start_session()
+    return True
+return False
+```
+
+---
+
+**`generator.py` — if con valor real**
+```python
+if length <= 0:
+    raise passwdInvalidError("Longitud inválida.")
+```
+
+---
+
+**`vault.py` — retornar json_bytes**
+```python
+def dictbytes():
+    try:
+        data = {"user": "anonym", "pass": "1234"}
+        json_bytes = json.dumps(data).encode("utf-8")
+        return json_bytes
+```
+
+**`vault.py` — abrir binario**
+```python
+with open('vault.enc', 'rb') as archivo:
+```
+
+**`vault.py` — chmod después de escribir**
+```python
+tmp.write_bytes(data)
+os.replace(tmp, path)
+os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+```
+
+---
+
+**`display.py` — usar el parámetro message**
+```python
+def show_error(message: str) -> None:
+    print(f"{RED}[!] {message}{RESET}")
+
+def show_success(message: str) -> None:
+    print(f"{GREEN}[+] {message}{RESET}")
+```
+
+**`display.py` — clear_screen sin print**
+```python
+def clear_screen() -> None:
+    command = "cls" if os.name == "nt" else "clear"
+    os.system(command)
+```
+
+---
+
+**`passfort.py` — llamar salt como función**
+```python
+firma = firm(value, salt())
+resultado = verificar(value, salt(), firma)
+```

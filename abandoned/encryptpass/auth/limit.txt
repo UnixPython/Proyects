@@ -1,0 +1,165 @@
+# ============================================================
+# Claude Code — FASE 4
+# CLASIFICACIÓN — qué fragmento va en cada función
+# ============================================================
+
+
+# ──────────────────────────────────────────────────────────────
+# _cargar_estado()
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTO QUE VA AQUÍ:
+
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE, "r") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_SH)   # lock compartido
+        data = json.load(f)                        # lectura segura
+else:
+    data = {
+        "fallos"        : [],
+        "lockout_count" : 0,
+        "bloqueado_hasta": 0.0,
+    }
+
+# POR QUÉ LOCK_SH aquí y no LOCK_EX:
+# lectura → varios procesos pueden leer a la vez (LOCK_SH)
+# escritura → solo uno a la vez (LOCK_EX) → eso va en _guardar_estado
+
+
+# ──────────────────────────────────────────────────────────────
+# _guardar_estado()
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTO QUE VA AQUÍ:
+
+tmp = STATE_FILE + ".tmp"
+
+with open(tmp, "w") as f:
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    json.dump(data, f)
+    f.flush()
+    os.fsync(f.fileno())
+
+os.rename(tmp, STATE_FILE)
+os.chmod(STATE_FILE, 0o600)
+
+# POR QUÉ en este orden exacto:
+# json.dump  → escribe en tmp, no en el original
+# fsync      → garantiza que llegó al disco físico
+# rename     → syscall atómica, swapea tmp → original
+# chmod      → permisos restrictivos después del rename
+
+
+# ──────────────────────────────────────────────────────────────
+# _limpiar_expirados()
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTO QUE VA AQUÍ:
+
+ahora    = time.time()
+recientes = [t for t in fallos if ahora - t < VENTANA]
+
+# POR QUÉ time.time() y no time.monotonic():
+# los timestamps se guardan en disco y se recargan
+# monotonic se resetea al reiniciar el proceso
+# time.time() es la hora real → sobrevive reinicios
+
+
+# ──────────────────────────────────────────────────────────────
+# _calcular_delay()
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTO QUE VA AQUÍ:
+
+delay = min(2 ** n_fallos, MAX_DELAY)
+
+# TABLA RESULTANTE con MAX_DELAY = 120:
+# n=1 → 2s
+# n=2 → 4s
+# n=3 → 8s
+# n=4 → 16s
+# n=5 → 32s
+# n=6 → 64s
+# n=7 → 120s (cap)
+
+
+# ──────────────────────────────────────────────────────────────
+# _calcular_tier()
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTO QUE VA AQUÍ:
+
+TIERS = {1: 300, 2: 1800, 3: 86400}
+
+duracion = TIERS.get(lockout_count, 86400)
+# si lockout_count > 3 → siempre 24h
+
+
+# ──────────────────────────────────────────────────────────────
+# esta_bloqueado()
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTOS QUE VAN AQUÍ (en orden):
+
+with _lock:                                          # 1. threading
+    data = _cargar_estado()                          # 2. cargar
+    data["fallos"] = _limpiar_expirados(...)         # 3. limpiar
+
+    if time.time() < data["bloqueado_hasta"]:        # 4. verificar
+        espera = data["bloqueado_hasta"] - time.time()
+        raise RateLimitErr(                          # 5. lanzar
+            tiempo_espera   = espera,
+            bloqueado_hasta = data["bloqueado_hasta"],
+            tier            = data["lockout_count"],
+        )
+
+
+# ──────────────────────────────────────────────────────────────
+# registrar_fallo()
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTOS QUE VAN AQUÍ (en orden):
+
+with _lock:
+    data = _cargar_estado()
+    data["fallos"] = _limpiar_expirados(data["fallos"])
+    data["fallos"].append(time.time())               # timestamp real
+
+    if len(data["fallos"]) >= MAX_FALLOS:
+        data["lockout_count"] += 1                   # tier sube
+        duracion = _calcular_tier(data["lockout_count"])
+        data["bloqueado_hasta"] = time.time() + duracion
+        data["fallos"] = []                          # resetea fallos
+
+    _guardar_estado(data)
+
+
+# ──────────────────────────────────────────────────────────────
+# registrar_exito()
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTO QUE VA AQUÍ:
+
+with _lock:
+    data = _cargar_estado()
+    data["fallos"] = []       # NIST: éxito descarta historial
+    # lockout_count NO se toca → el tier persiste
+    _guardar_estado(data)
+
+
+# ──────────────────────────────────────────────────────────────
+# core/exceptions.py — RateLimitErr
+# ──────────────────────────────────────────────────────────────
+
+# FRAGMENTO QUE VA EN ESE ARCHIVO:
+
+class RateLimitErr(Exception):
+    def __init__(
+        self,
+        tiempo_espera   : float,
+        bloqueado_hasta : float,
+        tier            : int,
+    ):
+        self.tiempo_espera   = tiempo_espera
+        self.bloqueado_hasta = bloqueado_hasta
+        self.tier            = tier

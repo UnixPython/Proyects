@@ -1,0 +1,9 @@
+getprop ro.product.model
+
+# Board/hardware
+getprop ro.product.board
+
+# Brand
+getprop ro.product.brand
+
+

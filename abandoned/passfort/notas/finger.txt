@@ -1,0 +1,89 @@
+# Fragmentos recopilados
+
+---
+
+## 1. blake2b con salt
+```python
+import os
+from hashlib import blake2b
+
+salt = os.urandom(blake2b.SALT_SIZE)
+h = blake2b(salt=salt)
+h.update(b'datos')
+resultado = h.hexdigest()
+```
+
+---
+
+## 2. blake2b con person (propósito específico)
+```python
+from hashlib import blake2b
+
+h = blake2b(digest_size=32, person=b'passfort fingerprint')
+h.update(b'datos del hardware')
+print(h.hexdigest())
+```
+
+---
+
+## 3. Firmar y verificar con compare_digest
+```python
+from hashlib import blake2b
+from hmac import compare_digest
+
+SECRET_KEY = b'clave-secreta'
+
+def sign(data):
+    h = blake2b(digest_size=16, key=SECRET_KEY)
+    h.update(data)
+    return h.hexdigest().encode('utf-8')
+
+def verify(data, sig):
+    good_sig = sign(data)
+    return compare_digest(good_sig, sig)
+```
+
+---
+
+## 4. subprocess capturar output
+
+```python
+import subprocess
+
+try:
+    result = subprocess.run(
+        ["getprop", "ro.product.model"],
+        capture_output=True,
+        text=True,
+        timeout=10
+    )
+    print(result.stdout)
+except subprocess.TimeoutExpired:
+    print("timeout")
+```
+
+---
+
+## 5. hmac.compare_digest aislado
+```python
+import hmac
+
+def comparar_hashes(hash_guardado, hash_nuevo):
+    return hmac.compare_digest(hash_guardado, hash_nuevo)
+```
+
+---
+
+## 6. Derivar dos claves desde una sola
+```python
+from hashlib import blake2s
+from base64 import b64decode
+
+orig_key = b64decode(b'Rm5EPJai72qcK3RGBpW3vPNfZy5OZothY+kHY6h21KM=')
+enc_key = blake2s(key=orig_key, person=b'kEncrypt').digest()
+mac_key = blake2s(key=orig_key, person=b'kMAC').digest()
+```
+
+---
+
+Esos son todos. Ahora sí, Fase 4 — empieza `fingerprint.py`.

@@ -1,0 +1,28 @@
+from hashlib import blake2b
+import hmac
+
+SECRET_KEY = b'mi_clave_secreta'
+
+def firmar(dato: bytes) -> str:
+    h = blake2b(
+        digest_size=32,
+        key=SECRET_KEY,
+        salt=b'salt_fijo_1234',   # max 16 bytes
+        person=b'modulo_login'    # max 16 bytes
+    )
+    h.update(dato)
+    return h.hexdigest()
+
+def verificar(dato: bytes, firma: str) -> bool:
+    firma_esperada = firmar(dato)
+    return hmac.compare_digest(firma_esperada, firma)
+
+
+# --- uso ---
+dato = b'usuario:pedro'
+
+firma = firmar(dato)
+print("Firma:", firma)
+
+print(verificar(dato, firma))           # True
+print(verificar(b'usuario:hack', firma)) # False

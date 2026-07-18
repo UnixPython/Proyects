@@ -1,0 +1,16 @@
+
+passfort/
+├── passfort.py           # Entry point CLI
+├── core/
+│   ├── __init__.py
+│   ├── crypto.py         # Toda la criptografía
+│   ├── vault.py          # Leer/escribir el vault
+│   ├── fingerprint.py    # Hardware fingerprint
+│   ├── auth.py           # Login temporal de 30s
+│   └── generator.py      # Generador de contraseñas
+├── utils/
+│   ├── __init__.py
+│   ├── clipboard.py      # Clipboard con auto-clear
+│   └── display.py        # Output al terminal
+└── data/
+    └── vault.enc         # El vault cifrado (se crea al init)

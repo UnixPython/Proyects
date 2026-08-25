@@ -1,0 +1,33 @@
+2026-08-24 23:29:53,236 | INFO | audit | [boot_info] Ejecutando: dmesg | head -50
+2026-08-24 23:29:53,276 | INFO | audit | [boot_info] Ejecutando: cat /etc/default/grub
+2026-08-24 23:31:14,335 | INFO | audit | [rkhunter_scan] Ejecutando: sudo rkhunter --check
+2026-08-24 23:33:42,687 | INFO | audit | [rkhunter_scan] Ejecutando: sudo rkhunter --check
+2026-08-24 23:34:09,029 | INFO | audit | [procesos_info] Ejecutando: ps aux
+2026-08-24 23:34:09,091 | INFO | audit | [procesos_info] Ejecutando: ps -u username
+2026-08-24 23:34:35,507 | INFO | audit | [security_password] Ejecutando: sudo cat /etc/pam.d/common-password
+2026-08-24 23:34:35,579 | INFO | audit | [security_password] Ejecutando: cat /etc/login.defs | grep PASS_
+2026-08-24 23:34:35,585 | INFO | audit | [security_password] Ejecutando: sudo cat /var/log/faillog
+2026-08-24 23:38:39,278 | INFO | audit | [usuarios_info] Ejecutando: cat /etc/passwd
+2026-08-24 23:38:39,282 | INFO | audit | [usuarios_info] Ejecutando: cut -d: -f1 /etc/passwd
+2026-08-24 23:38:39,286 | INFO | audit | [usuarios_info] Ejecutando: lastlog
+2026-08-24 23:38:39,296 | INFO | audit | [usuarios_info] Ejecutando: lastlog -u username
+2026-08-24 23:38:39,300 | ERROR | audit | [usuarios_info] Falló: lastlog -u username (código 1)
+2026-08-24 23:38:39,300 | INFO | audit | [usuarios_info] Ejecutando: who
+2026-08-24 23:38:39,306 | INFO | audit | [usuarios_info] Ejecutando: w
+2026-08-24 23:38:39,374 | INFO | audit | [usuarios_info] Ejecutando: id username
+2026-08-24 23:38:39,381 | ERROR | audit | [usuarios_info] Falló: id username (código 1)
+2026-08-24 23:38:39,381 | INFO | audit | [usuarios_info] Ejecutando: whoami
+2026-08-24 23:38:39,392 | INFO | audit | [usuarios_info] Ejecutando: id -a
+2026-08-24 23:38:39,397 | INFO | audit | [usuarios_info] Ejecutando: sudo -l
+2026-08-24 23:38:39,406 | INFO | audit | [usuarios_info] Ejecutando: sudo cat /etc/sudoers
+2026-08-24 23:38:39,477 | INFO | audit | [usuarios_info] Ejecutando: sudo ls -la /etc/sudoers.d/
+2026-08-24 23:39:08,922 | INFO | audit | [boot_time] Ejecutando: systemd-analyze
+2026-08-24 23:39:08,982 | INFO | audit | [boot_time] Ejecutando: systemd-analyze blame
+2026-08-24 23:39:10,817 | INFO | audit | [boot_time] Ejecutando: systemd-analyze plot > boot.svg
+2026-08-24 23:39:12,313 | INFO | audit | [boot_time] Ejecutando: systemd-analyze blame | head -10
+2026-08-24 23:39:13,588 | INFO | audit | [boot_time] Ejecutando: systemd-analyze critical-chain
+2026-08-24 23:39:31,782 | INFO | audit | [boot_time] Ejecutando: systemd-analyze
+2026-08-24 23:39:31,793 | INFO | audit | [boot_time] Ejecutando: systemd-analyze blame
+2026-08-24 23:39:33,080 | INFO | audit | [boot_time] Ejecutando: systemd-analyze plot > boot.svg
+2026-08-24 23:39:34,316 | INFO | audit | [boot_time] Ejecutando: systemd-analyze blame | head -10
+2026-08-24 23:39:35,598 | INFO | audit | [boot_time] Ejecutando: systemd-analyze critical-chain

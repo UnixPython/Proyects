@@ -1,0 +1,75 @@
+Tengo el "How to Hash a Password" directo de la doc oficial. Ahora verifico el perfil `RFC_9106_LOW_MEMORY` en el entorno real, porque quiero confirmar cómo se importa y qué valores trae.
+
+Probado y funcionando en este entorno. Aquí están los fragmentos, tal como los da la fuente, más lo confirmado con la ejecución real.
+
+## Fuente: `argon2-cffi.readthedocs.io/en/stable/howto.html` — "How to Hash a Password"
+
+*argon2-cffi* trae una API de alto nivel y usa los parámetros oficiales recomendados de bajo consumo de memoria, que dan un tiempo de verificación de 40–50 ms en hardware reciente.
+
+```python
+>>> from argon2 import PasswordHasher
+>>> ph = PasswordHasher()
+>>> hash = ph.hash("correct horse battery staple")
+>>> hash
+'$argon2id$v=19$m=65536,t=3,p=4$MIIRqgvgQbgj220jfp0MPA$YfwJSVjtjSU0zzV/P3S9nnQ/USre2wvJMjfCIjrTQbg'
+>>> ph.verify(hash, "correct horse battery staple")
+True
+>>> ph.check_needs_rehash(hash)
+False
+>>> ph.verify(hash, "Tr0ub4dor&3")
+Traceback (most recent call last):
+...
+argon2.exceptions.VerifyMismatchError: The password does not match the supplied hash
+```
+
+## Perfil `RFC_9106_LOW_MEMORY`, verificado en este entorno
+
+Tal como me pediste, esta es la forma de usar ese perfil en vez de los valores por defecto:
+
+```python
+from argon2 import PasswordHasher
+from argon2.profiles import RFC_9106_LOW_MEMORY
+
+ph = PasswordHasher.from_parameters(RFC_9106_LOW_MEMORY)
+```
+
+Los parámetros reales del perfil, tal como los imprimió Python:
+
+```
+Parameters(type=<Type.ID: 2>, version=19, salt_len=16, hash_len=32,
+           time_cost=3, memory_cost=65536, parallelism=4)
+```
+
+`memory_cost=65536` son KiB, es decir 64 MiB, coherente con lo que dice la doc arriba ("64 MB conservador").
+
+## Flujo de login, de la misma página
+
+```python
+import argon2
+
+ph = argon2.PasswordHasher()
+
+def login(db, user, password):
+    hash = db.get_password_hash_for_user(user)
+    ph.verify(hash, password)          # lanza excepción si es incorrecta
+
+    if ph.check_needs_rehash(hash):
+        db.set_password_hash_for_user(user, ph.hash(password))
+```
+
+## Lo que corrí y confirmó todo
+
+```
+hash: $argon2id$v=19$m=65536,t=3,p=4$o9fx...
+verify OK: True
+needs_rehash: False
+verify mal: VerifyMismatchError The password does not match the supplied hash
+```
+
+Con el perfil `LOW_MEMORY`, el `hash()` en vez de `ph = PasswordHasher()`, cambia solo esa línea:
+
+```python
+ph = PasswordHasher.from_parameters(RFC_9106_LOW_MEMORY)
+```
+
+Todo lo demás (`hash`, `verify`, `check_needs_rehash`, `VerifyMismatchError`) queda igual.

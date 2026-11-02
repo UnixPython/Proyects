@@ -1,27 +1,15 @@
 CipherVane/
-�
-+-- capa1/                      # N�cleo de Soporte y Diagn�stico
-�   +-- __init__.py
-�   +-- exceptions.py             # Excepciones personalizadas (InvalidSignature, TLS, Handshake)
-�   +-- logging.py                # Configuraci�n centralizada de logs y depuraci�n
-�
-+-- capa_cripto/               # Motor Criptogr�fico y PKI
-    +-- __init__.py
-    +-- certs.py                  # Generaci�n y gesti�n de la PKI (Root CA, Intermedia, Leaf, SAN)
-    +-- crypto.py                 # Generaci�n de claves ECC (SECP256R1) y serializaci�n PEM
-    +-- vert_crypt.py             # Firma digital (ECDSA) y verificaci�n de certificados/datos
-    +-- exchange.py               # Intercambio ECDH (est�tico/ef�mero) + Derivaci�n de claves con HKDF
-    +-- estates.py                # Jerarqu�as de claves, gesti�n de estados y carga segura de almacenes (Store/PolicyBuilder)
-|
-|
-|
-|
-|
-|- Capa ejecucion
-- argparse 
-	- llamar variables
-	- argpars class errors
-	- interno de ejecucion
-- main
-	- if main
-
+├── capa_cripto/
+│   ├── crypto.py      # Generación de par de claves ECC y E/S en formato PEM (PKCS#8)
+│   ├── vert_crypt.py  # Operaciones de firma/verificación ECDSA y manejo de excepciones
+│   ├── exchange.py    # Handshake ECDH/ECDHE y derivación de clave HKDF-SHA256
+│   ├── certs.py       # Motor de emisión de PKI X.509 (Root, Intermediate, Leaf)
+│   └── estates.py     # Motor de validación de cadenas de certificados de confianza
+├── capa_red/
+│   ├── tls_context.py # Fábrica de contextos SSLContext configurados para mTLS
+│   ├── socket_srv.py  # Abstracción de conexión de red del Servidor TLS
+│   ├── socket_cli.py  # Abstracción de conexión de red del Cliente TLS
+│   └── relay.py       # Multiplexado I/O no bloqueante con `select.select`
+└── capa_app/
+    ├── exceptions.py  # Jerarquía de excepciones personalizadas del sistema
+    └── logging.py     # Subsistema de trazabilidad y auditoría

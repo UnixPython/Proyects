@@ -1,0 +1,27 @@
+CipherVane/
+¦
++-- capa1/                      # Núcleo de Soporte y Diagnóstico
+¦   +-- __init__.py
+¦   +-- exceptions.py             # Excepciones personalizadas (InvalidSignature, TLS, Handshake)
+¦   +-- logging.py                # Configuración centralizada de logs y depuración
+¦
++-- capa_cripto/               # Motor Criptográfico y PKI
+    +-- __init__.py
+    +-- certs.py                  # Generación y gestión de la PKI (Root CA, Intermedia, Leaf, SAN)
+    +-- crypto.py                 # Generación de claves ECC (SECP256R1) y serialización PEM
+    +-- vert_crypt.py             # Firma digital (ECDSA) y verificación de certificados/datos
+    +-- exchange.py               # Intercambio ECDH (estático/efímero) + Derivación de claves con HKDF
+    +-- estates.py                # Jerarquías de claves, gestión de estados y carga segura de almacenes (Store/PolicyBuilder)
+|
+|
+|
+|
+|
+|- Capa ejecucion
+- argparse 
+	- llamar variables
+	- argpars class errors
+	- interno de ejecucion
+- main
+	- if main
+

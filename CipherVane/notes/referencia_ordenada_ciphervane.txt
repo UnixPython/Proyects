@@ -1,0 +1,493 @@
+================================================================================
+  REFERENCIA ORDENADA DE CÓDIGO — PROYECTO CIPHERVANE
+  Estructura modular de código criptográfico y de túneles
+================================================================================
+
+--------------------------------------------------------------------------------
+ ARCHIVO: CipherVane/capa_cripto/crypto.py
+ OBJETIVO: Generación de claves ECC (SECP256R1) y serialización/carga en PEM
+--------------------------------------------------------------------------------
+
+# SNIPPET 1.1 — Generar par de claves ECC (P-256)
+# Patrón: generate_private_key(curva) → private_key contiene también public_key
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.hazmat.primitives.asymmetric import ec
+
+private_key = ec.generate_private_key(ec.SECP256R1())
+public_key  = private_key.public_key()
+
+
+# SNIPPET 1.2 — Serializar a PEM (guardar en disco)
+# Patrón: private_bytes(encoding, format, encryption_algorithm)
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.hazmat.primitives import serialization
+
+# Clave privada sin passphrase
+pem_privada = private_key.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption()
+)
+
+# Clave privada con passphrase
+pem_privada_enc = private_key.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.BestAvailableEncryption(b"passphrase")
+)
+
+# Clave pública
+pem_publica = public_key.public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo
+)
+
+
+# SNIPPET 1.3 — Cargar claves desde PEM
+# Patrón: load_pem_*
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.hazmat.primitives.serialization import (
+    load_pem_private_key,
+    load_pem_public_key,
+)
+
+private_key = load_pem_private_key(pem_privada, password=None)
+private_key_enc = load_pem_private_key(pem_privada_enc, password=b"passphrase")
+public_key  = load_pem_public_key(pem_publica)
+
+
+--------------------------------------------------------------------------------
+ ARCHIVO: CipherVane/capa_cripto/vert_crypt.py
+ OBJETIVO: Verificación de firmas y firmas digitales con ECDSA
+--------------------------------------------------------------------------------
+
+# SNIPPET 2.1 — Firmar datos
+# Patrón: private_key.sign(data, ECDSA(hash))
+# Nota: usar esta forma (A), no la forma con Prehashed salvo casos especiales
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+
+data = b"datos a firmar"
+signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
+
+
+# SNIPPET 2.2 — Verificar firma
+# Patrón: public_key.verify(signature, data, ECDSA(hash))
+# Lanza InvalidSignature si la firma no es válida — siempre capturar
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.exceptions import InvalidSignature
+
+try:
+    public_key.verify(signature, data, ec.ECDSA(hashes.SHA256()))
+    # si no lanza excepción → firma válida
+except InvalidSignature:
+    # firma inválida o datos alterados
+    pass
+
+
+--------------------------------------------------------------------------------
+ ARCHIVO: CipherVane/capa_cripto/exchange.py
+ OBJETIVO: Intercambio de claves ECDH/ECDHE y derivación con HKDF
+--------------------------------------------------------------------------------
+
+# SNIPPET 3.1 — ECDH estático (ambas claves conocidas)
+# Patrón: private_key.exchange(ECDH(), peer_public_key) → shared_secret bytes
+# Nota: compartido_A == compartido_B (propiedad ECDH)
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.hazmat.primitives.asymmetric import ec
+
+shared_secret = private_key_a.exchange(ec.ECDH(), public_key_b)
+
+
+# SNIPPET 3.2 — ECDHE (efímero) + HKDF para derivar clave simétrica
+# Patrón: generar clave nueva por sesión → exchange → HKDF → clave_simetrica
+# IMPORTANTE: solo necesario si implementas cifrado manual sobre raw socket.
+#             Si usas ssl.SSLContext + wrap_socket, esto ya ocurre internamente.
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+# Generar clave efímera (nueva por sesión)
+efimera_priv = ec.generate_private_key(ec.SECP256R1())
+efimera_pub  = efimera_priv.public_key()
+
+# Intercambiar con la clave pública del peer (recibida por el canal)
+shared_secret = efimera_priv.exchange(ec.ECDH(), peer_public_key)
+
+# Derivar clave simétrica de 32 bytes (AES-256)
+clave_simetrica = HKDF(
+    algorithm=hashes.SHA256(),
+    length=32,
+    salt=None,
+    info=b"tunnel handshake",
+).derive(shared_secret)
+
+# PARA EL SIGUIENTE HANDSHAKE: generar nueva clave efímera obligatoriamente
+# efimera_priv = ec.generate_private_key(ec.SECP256R1())  <- nueva instancia
+
+
+--------------------------------------------------------------------------------
+ ARCHIVO: CipherVane/capa_cripto/certs.py
+ OBJETIVO: Generación y exportación de certificados X.509 de la PKI
+--------------------------------------------------------------------------------
+
+# SNIPPET 4.1 — CA Raíz autofirmada con ECC
+# Patrón: subject == issuer, BasicConstraints(ca=True, path_length=None)
+# ─────────────────────────────────────────────────────────────────────────────
+import datetime
+from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import hashes
+from cryptography.x509.oid import NameOID
+
+clave_ca = ec.generate_private_key(ec.SECP256R1())
+
+subject_ca = issuer_ca = x509.Name([
+    x509.NameAttribute(NameOID.COMMON_NAME, "Mi CA Raiz"),
+])
+
+cert_ca = (
+    x509.CertificateBuilder()
+    .subject_name(subject_ca)
+    .issuer_name(issuer_ca)
+    .public_key(clave_ca.public_key())
+    .serial_number(x509.random_serial_number())
+    .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+    .not_valid_after(
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650)
+    )
+    .add_extension(
+        x509.BasicConstraints(ca=True, path_length=None),
+        critical=True,
+    )
+    .add_extension(
+        x509.KeyUsage(
+            digital_signature=True,
+            content_commitment=False,
+            key_encipherment=False,
+            data_encipherment=False,
+            key_agreement=False,
+            key_cert_sign=True,
+            crl_sign=True,
+            encipher_only=False,
+            decipher_only=False,
+        ),
+        critical=True,
+    )
+    .add_extension(
+        x509.SubjectKeyIdentifier.from_public_key(clave_ca.public_key()),
+        critical=False,
+    )
+    .sign(clave_ca, hashes.SHA256())
+)
+
+
+# SNIPPET 4.2 — CA Intermedia firmada por la CA Raíz
+# Patrón: issuer_name = cert_ca.subject, path_length=0 (no puede crear más CAs)
+# ─────────────────────────────────────────────────────────────────────────────
+clave_ca_int = ec.generate_private_key(ec.SECP256R1())
+
+subject_int = x509.Name([
+    x509.NameAttribute(NameOID.COMMON_NAME, "Mi CA Intermedia"),
+])
+
+cert_ca_int = (
+    x509.CertificateBuilder()
+    .subject_name(subject_int)
+    .issuer_name(cert_ca.subject)                   # firmado por CA raíz
+    .public_key(clave_ca_int.public_key())
+    .serial_number(x509.random_serial_number())
+    .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+    .not_valid_after(
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1825)
+    )
+    .add_extension(
+        x509.BasicConstraints(ca=True, path_length=0),  # no puede firmar más CAs
+        critical=True,
+    )
+    .add_extension(
+        x509.KeyUsage(
+            digital_signature=True,
+            content_commitment=False,
+            key_encipherment=False,
+            data_encipherment=False,
+            key_agreement=False,
+            key_cert_sign=True,
+            crl_sign=True,
+            encipher_only=False,
+            decipher_only=False,
+        ),
+        critical=True,
+    )
+    .add_extension(
+        x509.SubjectKeyIdentifier.from_public_key(clave_ca_int.public_key()),
+        critical=False,
+    )
+    .add_extension(
+        x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
+            cert_ca.extensions.get_extension_for_class(
+                x509.SubjectKeyIdentifier
+            ).value
+        ),
+        critical=False,
+    )
+    .sign(clave_ca, hashes.SHA256())                # firma la CA raíz
+)
+
+
+# SNIPPET 4.3 — Certificado servidor (leaf) firmado por CA intermedia
+# Patrón: BasicConstraints(ca=False), ExtendedKeyUsage SERVER_AUTH, SAN con hostname/IP
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.x509 import DNSName, IPAddress
+from ipaddress import ip_address
+
+clave_servidor = ec.generate_private_key(ec.SECP256R1())
+
+subject_srv = x509.Name([
+    x509.NameAttribute(NameOID.COMMON_NAME, "servidor"),
+])
+
+cert_servidor = (
+    x509.CertificateBuilder()
+    .subject_name(subject_srv)
+    .issuer_name(cert_ca_int.subject)
+    .public_key(clave_servidor.public_key())
+    .serial_number(x509.random_serial_number())
+    .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+    .not_valid_after(
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+    )
+    .add_extension(
+        x509.BasicConstraints(ca=False, path_length=None),
+        critical=True,
+    )
+    .add_extension(
+        x509.KeyUsage(
+            digital_signature=True,
+            content_commitment=False,
+            key_encipherment=True,
+            data_encipherment=False,
+            key_agreement=False,
+            key_cert_sign=False,
+            crl_sign=False,
+            encipher_only=False,
+            decipher_only=False,
+        ),
+        critical=True,
+    )
+    .add_extension(
+        x509.ExtendedKeyUsage([x509.ExtendedKeyUsageOID.SERVER_AUTH]),
+        critical=False,
+    )
+    .add_extension(
+        x509.SubjectAlternativeName([
+            DNSName("localhost"),
+            IPAddress(ip_address("127.0.0.1")),
+        ]),
+        critical=False,
+    )
+    .add_extension(
+        x509.SubjectKeyIdentifier.from_public_key(clave_servidor.public_key()),
+        critical=False,
+    )
+    .add_extension(
+        x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
+            cert_ca_int.extensions.get_extension_for_class(
+                x509.SubjectKeyIdentifier
+            ).value
+        ),
+        critical=False,
+    )
+    .sign(clave_ca_int, hashes.SHA256())            # firma la CA intermedia
+)
+
+
+# SNIPPET 4.4 — Certificado cliente (leaf) firmado por CA intermedia
+# Diferencia con servidor: ExtendedKeyUsage CLIENT_AUTH
+# ─────────────────────────────────────────────────────────────────────────────
+clave_cliente = ec.generate_private_key(ec.SECP256R1())
+
+subject_cli = x509.Name([
+    x509.NameAttribute(NameOID.COMMON_NAME, "cliente"),
+])
+
+cert_cliente = (
+    x509.CertificateBuilder()
+    .subject_name(subject_cli)
+    .issuer_name(cert_ca_int.subject)
+    .public_key(clave_cliente.public_key())
+    .serial_number(x509.random_serial_number())
+    .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+    .not_valid_after(
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+    )
+    .add_extension(
+        x509.BasicConstraints(ca=False, path_length=None),
+        critical=True,
+    )
+    .add_extension(
+        x509.ExtendedKeyUsage([x509.ExtendedKeyUsageOID.CLIENT_AUTH]),
+        critical=False,
+    )
+    .add_extension(
+        x509.SubjectAlternativeName([DNSName("cliente")]),
+        critical=False,
+    )
+    .add_extension(
+        x509.SubjectKeyIdentifier.from_public_key(clave_cliente.public_key()),
+        critical=False,
+    )
+    .add_extension(
+        x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
+            cert_ca_int.extensions.get_extension_for_class(
+                x509.SubjectKeyIdentifier
+            ).value
+        ),
+        critical=False,
+    )
+    .sign(cert_ca_int, hashes.SHA256())
+)
+
+
+# SNIPPET 4.5 — Escribir certificados y claves a disco en PEM
+# Patrón: abrir en "wb", llamar public_bytes o private_bytes
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.hazmat.primitives import serialization
+
+def escribir_cert(ruta, cert):
+    with open(ruta, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+def escribir_clave(ruta, clave, password=None):
+    algoritmo = (
+        serialization.BestAvailableEncryption(password)
+        if password else serialization.NoEncryption()
+    )
+    with open(ruta, "wb") as f:
+        f.write(clave.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=algoritmo,
+        ))
+
+# Cadena de CA: intermedia + raíz concatenadas en un solo archivo
+def escribir_cadena_ca(ruta, *certs):
+    with open(ruta, "wb") as f:
+        for cert in certs:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+
+--------------------------------------------------------------------------------
+ ARCHIVO: CipherVane/capa_cripto/estates.py
+ OBJETIVO: Validación de cadenas de certificados y gestión de almacenes de confianza
+--------------------------------------------------------------------------------
+
+# SNIPPET 4.6 — Verificar cadena de certificados en código
+# Patrón: Store([root]) → PolicyBuilder → build_server_verifier → verify
+# ─────────────────────────────────────────────────────────────────────────────
+from cryptography.x509 import DNSName
+from cryptography.x509.verification import PolicyBuilder, Store
+
+store    = Store([cert_ca])                             # solo la CA raíz
+builder  = PolicyBuilder().store(store)
+verifier = builder.build_server_verifier(DNSName("localhost"))
+
+# verify devuelve la cadena completa si es válida, lanza excepción si no
+cadena = verifier.verify(cert_servidor, [cert_ca_int])
+
+
+--------------------------------------------------------------------------------
+ CAPAS DE RED Y TÚNEL DE COMUNICACIÓN (MODULOS COMPLEMENTARIOS)
+--------------------------------------------------------------------------------
+
+# SNIPPET 5.1 — Contexto servidor con mTLS
+import ssl
+
+def crear_contexto_servidor(certfile, keyfile, cafile):
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(certfile, keyfile)      # cert + clave del servidor
+    ctx.load_verify_locations(cafile)           # CA para verificar al cliente
+    ctx.verify_mode = ssl.CERT_REQUIRED         # rechazar si cliente no presenta cert
+    return ctx
+
+
+# SNIPPET 5.2 — Contexto cliente con mTLS
+def crear_contexto_cliente(certfile, keyfile, cafile):
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.load_cert_chain(certfile, keyfile)      # cert + clave del cliente
+    ctx.load_verify_locations(cafile)           # CA para verificar al servidor
+    ctx.check_hostname = False                  # necesario si usas IP o localhost
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    return ctx
+
+
+# SNIPPET 5.3 — Servidor: accept + wrap_socket
+import socket, ssl
+
+def arrancar_servidor(ctx, host, puerto):
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind((host, puerto))
+    srv.listen(5)
+
+    raw_conn, addr = srv.accept()
+    ssl_conn = ctx.wrap_socket(raw_conn, server_side=True)
+    return ssl_conn, addr
+
+
+# SNIPPET 5.4 — Cliente: connect + wrap_socket
+def conectar_cliente(ctx, host, puerto):
+    raw = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    ssl_conn = ctx.wrap_socket(raw, server_side=False, server_hostname=host)
+    ssl_conn.connect((host, puerto))
+    return ssl_conn
+
+
+# SNIPPET 5.5 — Inspeccionar certificado del peer tras handshake
+def obtener_cn_peer(ssl_conn):
+    cert = ssl_conn.getpeercert()
+    if not cert:
+        return None
+    subject = dict(x[0] for x in cert["subject"])
+    return subject.get("commonName")
+
+
+# SNIPPET 5.6 — Manejo de excepciones SSL
+try:
+    ssl_conn = ctx.wrap_socket(raw_conn, server_side=True)
+except ssl.SSLCertVerificationError as e:
+    print(f"Certificado inválido: {e.verify_message}")
+except ssl.SSLEOFError:
+    print("Conexión cerrada abruptamente")
+except ssl.SSLError as e:
+    print(f"Error TLS genérico: {e}")
+
+
+# SNIPPET 6.1 — Relay bidireccional con select (sin threads)
+import select
+
+def relay(sock_a, sock_b, bufsize=4096):
+    while True:
+        legibles, _, _ = select.select([sock_a, sock_b], [], [])
+        for src in legibles:
+            dst = sock_b if src is sock_a else sock_a
+            data = src.recv(bufsize)
+            if not data:                    # EOF: conexión cerrada limpiamente
+                return
+            dst.sendall(data)               # sendall garantiza envío completo
+
+
+# SNIPPET 6.2 — Cierre limpio de sockets
+def cerrar(ssl_conn):
+    try:
+        ssl_conn.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    finally:
+        ssl_conn.close()
+
+================================================================================
+ FIN DEL ARCHIVO DE REFERENCIA
+================================================================================
